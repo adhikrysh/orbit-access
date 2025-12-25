@@ -1,0 +1,8 @@
+{
+  "two-body": {
+    "max_relative_energy_change": 1.6746249077268715e-10
+  },
+  "j2": {
+    "max_relative_energy_change": 1.6511892190876444e-10
+  }
+}
