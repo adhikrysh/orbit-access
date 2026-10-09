@@ -1,14 +1,8 @@
 # orbit-access
 
-a satellite in low earth orbit does not linger. in this model's default scenario it rises over a ground station, crosses the sky in six to eight minutes, and sets. miss that window and the data waits for the next pass, which may be hours away. four windows a day, about half an hour of talking time in total.
+a leo pass over a ground station lasts six to eight minutes in this model. four a day, about half an hour of contact in total. predict the window late and the pass is gone; the next one is hours away.
 
-so the most valuable question in a ground station's day is deceptively simple: when, exactly, can we see it?
-
-answering it means arguing with two stubborn facts. the earth is not a sphere; it bulges at the equator, and that bulge slowly swings every inclined orbit plane around the pole. and the earth will not hold still; the station is spinning under the satellite at about 465 metres per second at the equator. get either wrong and the antenna points at empty sky.
-
-orbit-access is a small, honest model of that argument.
-
-## what it does
+the earth makes this annoying. it's oblate, so J2 swings inclined orbit planes around the pole, and the station is moving under the satellite at about 465 m/s. ignore either one and the dish points at empty sky.
 
 orbit-access propagates a satellite in an inertial frame and computes its elevation above a ground station on a rotating, oblate earth. it reports intervals above the station's elevation mask.
 
@@ -34,18 +28,18 @@ the default CLI scenario starts with a circular orbit at a 7,000 km geocentric r
 
 the state is position in kilometres and velocity in kilometres per second. time is elapsed seconds. vectors live in a right-handed inertial frame whose positive z axis is earth's spin axis. library angles are radians; the CLI converts its latitude, longitude, and mask arguments from degrees. [orbit.hpp](include/orbit/orbit.hpp) defines these units and conventions.
 
-the force model combines central gravity with J2, the dominant correction for earth's equatorial bulge. its potential per unit mass is:
+the force model combines central gravity with J2. its potential per unit mass is:
 
 ```text
 U = -mu/r [1 - J2/2 (R/r)^2
             (3z^2/r^2 - 1)]
 ```
 
-`U` is potential energy per unit mass in km²/s², `J2` is a dimensionless coefficient, and `z` is the spin-axis component of position in km. `mu` is the gravitational parameter in km³/s², `R` is the reference radius in km, and `r` is the distance from earth's centre in km. [dynamics.cpp](src/dynamics.cpp) evaluates the matching acceleration directly. setting J2 to zero leaves the two-body model. with J2 enabled, the orbit plane precesses; energy and z angular momentum remain conserved, while the full angular-momentum vector does not. [numerics.md](docs/numerics.md) makes that distinction explicit because it determines which conservation check is valid.
+units are km, km/s and km²/s² throughout. [dynamics.cpp](src/dynamics.cpp) evaluates the matching acceleration directly. setting J2 to zero leaves the two-body model. with J2 enabled, the orbit plane precesses; energy and z angular momentum remain conserved, while the full angular-momentum vector does not. [numerics.md](docs/numerics.md) makes that distinction explicit because it determines which conservation check is valid.
 
 ## propagation
 
-[dynamics.cpp](src/dynamics.cpp) uses Dormand-Prince 5(4), an adaptive Runge-Kutta method. each attempted step produces fifth- and fourth-order states; their scaled difference estimates local error. position and velocity have separate absolute tolerances because kilometres and kilometres per second have different scales: 1e-8 km, 1e-11 km/s, with 1e-11 relative tolerance. accepted steps can grow to 60 s; rejected steps shrink. the propagator either reaches the requested time or throws when its minimum step or work budget is exhausted. it does not return a partial trajectory as a complete one.
+[dynamics.cpp](src/dynamics.cpp) uses Dormand-Prince 5(4). position and velocity have separate absolute tolerances because kilometres and kilometres per second have different scales: 1e-8 km, 1e-11 km/s, with 1e-11 relative tolerance. accepted steps can grow to 60 s; rejected steps shrink. the propagator either reaches the requested time or throws when its minimum step or work budget is exhausted. it does not return a partial trajectory as a complete one.
 
 ## station geometry
 
@@ -77,5 +71,3 @@ ctest --test-dir build --output-on-failure
 the first command writes one day of states at 60-second intervals. the second searches passes above a 10-degree mask. append `x y z vx vy vz` to provide another initial state, in kilometres and kilometres per second; use `two-body` to disable J2. reproduce the figure with Matplotlib and NumPy using `python examples/plot.py`.
 
 time zero uses a caller-defined earth orientation; the CLI uses zero Greenwich angle and station height. it has no UTC conversion, precession, nutation, polar motion, drag, lunar or solar gravity, atmospheric refraction, impact detection, or event-completeness guarantee. it is appropriate for inspecting numerical and geometric assumptions, not operational contact prediction.
-
-the satellite does not care about any of this. it just keeps falling around the earth, missing it. the code's job is to know, to the hundred-thousandth of a second in this model, when it will be overhead.
