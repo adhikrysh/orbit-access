@@ -1,29 +1,29 @@
 # orbit-access
 
-a leo satellite gives a ground station about six to eight minutes a pass, a few passes a day. miss the window and you wait hours. the earth doesn't help: it's fat at the equator, so J2 drags inclined orbits around, and the station is spinning under the satellite at ~465 m/s. get either wrong and the dish is pointing at a cloud.
+a ground station only gets a few minutes of contact per pass with a satellite in low earth orbit. in this model's default case that's four passes a day of six to eight minutes each, about half an hour of contact in total, so the pass times need to be predicted accurately. two effects dominate the error: earth's oblateness (J2), which precesses inclined orbit planes, and earth's rotation, which moves the station under the orbit at ~465 m/s at the equator.
 
-this propagates an orbit with J2, puts a WGS84 station on a spinning earth, and finds every window above the elevation mask.
+orbit-access propagates a satellite state with J2, places a WGS84 station on a rotating earth, and reports every interval above the elevation mask.
 
 ```text
-state at t0 -> adaptive J2 propagation -> WGS84 station + earth spin
+state at t0 -> adaptive J2 propagation -> WGS84 station + earth rotation
             -> elevation above mask -> bracket -> bisect -> pass
 ```
 
-default run (circular, 7,000 km, 51.6°, station at 1.35° N 103.82° E) gives four passes above 10° in a day: 390.278, 449.958, 455.508 and 404.475 s. model outputs, not a forecast for anything real.
+the default run (circular orbit, 7,000 km radius, 51.6° inclination, station at 1.35° N 103.82° E) finds four passes above 10° in one day: 390.278, 449.958, 455.508 and 404.475 s. these are outputs of this model, not predictions for a real spacecraft.
 
 ![One-day comparison](docs/orbit-comparison.png)
 
-## how
+## design
 
-dynamics are central gravity plus J2 in [dynamics.cpp](src/dynamics.cpp), integrated with Dormand-Prince 5(4) using separate tolerances for km and km/s (1e-8 km, 1e-11 km/s). it either reaches the requested time or throws, it never quietly hands back half a trajectory.
+the force model is central gravity plus J2 ([dynamics.cpp](src/dynamics.cpp)), integrated with Dormand-Prince 5(4) using separate absolute tolerances for position and velocity (1e-8 km, 1e-11 km/s). the propagator either reaches the requested time or throws; it never returns a partial trajectory.
 
-with J2 on, energy and z angular momentum are conserved but the full angular momentum vector isn't, which matters because it decides which conservation test is even valid ([numerics.md](docs/numerics.md)).
+with J2 enabled, energy and the z component of angular momentum are conserved but the full angular momentum vector is not. that determines which conservation checks are valid tests of the integrator ([numerics.md](docs/numerics.md)).
 
-the station uses the WGS84 ellipsoid normal as up, not the line from earth's centre, rotated with an explicit Greenwich angle. passes are found by sampling every 10 s, then bisecting each crossing to 1e-5 s, re-propagating from the same endpoint every time instead of interpolating. a pass shorter than the sample step can still sneak through between samples, and that's stated, not hidden.
+the station's local vertical is the WGS84 ellipsoid normal rather than the geocentric direction, rotated into the inertial frame with an explicit Greenwich angle. passes are found by sampling elevation every 10 s and bisecting each visibility change to 1e-5 s, re-propagating from the same left endpoint each time instead of interpolating elevation. a grazing pass shorter than the sample step can still be missed, and the documentation says so.
 
-## tests
+## verification
 
-150 elliptic two-body runs against an independent Kepler solver (under 0.5 m and 0.5 mm/s), conservation over long runs, J2 acceleration against a numerical potential gradient, node drift within 1% of secular theory, analytic rise and set times, and the same pass list when the sample step drops from 31 s to 7 s. [ci](.github/workflows/check.yml) runs it under asan and ubsan.
+150 elliptic two-body propagations against an independent Kepler solver (under 0.5 m and 0.5 mm/s), long-run conservation, the J2 acceleration against a numerical potential gradient, node drift within 1% of first-order secular theory, analytic rise and set times, and an identical pass list when the sample step drops from 31 s to 7 s. [ci](.github/workflows/check.yml) runs the suite under asan and ubsan.
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build
@@ -31,4 +31,4 @@ ctest --test-dir build --output-on-failure
 ./build/orbit-access passes 86400 1.3521 103.8198 10 j2
 ```
 
-no drag, no moon, no sun, no UTC or polar motion, no refraction. good for poking at the numerics, not for booking a real antenna.
+not modelled: drag, lunar and solar gravity, utc and polar motion, refraction. it's a tool for examining the numerics and geometry, not for operational contact scheduling.
